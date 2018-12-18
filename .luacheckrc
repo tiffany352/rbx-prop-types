@@ -49,3 +49,7 @@ std = "lua51+roblox"
 files["**/*.spec.lua"] = {
 	std = "+testez",
 }
+
+ignore = {
+	"212"
+}
