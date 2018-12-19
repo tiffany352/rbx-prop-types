@@ -252,36 +252,83 @@ function PropTypes.ofClass(className)
 	end)
 end
 
-function PropTypes.tableOf(itemValidator)
-	return PropTypes.all(
-		PropTypes.table,
-		function(value)
-			local failures = {}
+function PropTypes.mapOf(keyValidator, valueValidator)
+	return Predicate.new("map", { keyValidator = keyValidator, valueValidator = valueValidator }, function(self, value)
+		local failures = {}
 
-			for key, subValue in pairs(value) do
-				local success, failureReason = itemValidator(subValue)
+		for key, subValue in pairs(value) do
+			local success, failureReason = self.keyValidator(key)
 
-				if not success then
-					table.insert(failures, ("\tkey %q (%q of type %q):\n\t\t%s"):format(
-						tostring(key),
-						tostring(subValue),
-						typeof(subValue),
-						failureReason or DEFAULT_REASON
-					))
-				end
+			if not success then
+				table.insert(failures, ("\tkey %q:\n\t\t%s"):format(
+					tostring(key),
+					failureReason or DEFAULT_REASON
+				))
 			end
 
-			if #failures > 0 then
-				return false, ("%d key%s incorrect:\n%s"):format(
-					#failures,
-					#failures == 1 and " is" or "s are",
-					table.concat(failures, "\n")
-				)
-			else
-				return true
+			success, failureReason = self.valueValidator(subValue)
+
+			if not success then
+				table.insert(failures, ("\tkey %q (%q of type %q):\n\t\t%s"):format(
+					tostring(key),
+					tostring(subValue),
+					typeof(subValue),
+					failureReason or DEFAULT_REASON
+				))
 			end
 		end
-	)
+
+		if #failures > 0 then
+			return false, ("%d key%s incorrect:\n%s"):format(
+				#failures,
+				#failures == 1 and " is" or "s are",
+				table.concat(failures, "\n")
+			)
+		else
+			return true
+		end
+	end)
+end
+
+PropTypes.dict = function(valueValidator)
+	return PropTypes.mapOf(PropTypes.string, valueValidator)
+end
+
+function PropTypes.arrayOf(validator)
+	return Predicate.new("array", { validator = validator }, function(self, value)
+		if type(value) ~= 'table' then
+			return false, ("Expected array, got %q"):format(typeof(value))
+		end
+
+		local failures = {}
+		local numKeys = 0
+		for key, subValue in pairs(value) do
+			numKeys = numKeys + 1
+
+			if type(key) ~= 'number' then
+				table.insert(failures, ("\tkey %q: expected number, got %q"):format(tostring(key), typeof(key)))
+			end
+
+			local ok, reason = self.validator(subValue)
+			if not ok then
+				table.insert(failures, ("\tindex %d:\n\t\t%s"):format(key, reason))
+			end
+		end
+
+		if #failures > 0 then
+			return false, ("%d key%s incorrect:\n%s"):format(
+				#failures,
+				#failures == 1 and " is" or "s are",
+				table.concat(failures, "\n")
+			)
+		end
+
+		if numKeys ~= #value then
+			return false, "Expected array to be contiguous"
+		end
+
+		return true
+	end)
 end
 
 function PropTypes.oneOf(possibilities)
